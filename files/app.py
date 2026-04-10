@@ -150,13 +150,9 @@ with tab1:
         label_visibility="collapsed",
     )
 
-    # Reset drilldown filters when flow changes so stale partners/reporters don't
-    # carry over across flows (e.g. "United States" from Imports into EU Only)
-    if st.session_state.get("_dest_flow_prev") != flow_choice:
-        for _k in ["dest_reporters", "dest_tags", "dest_partners", "dest_partner_region",
-                   "dest_cy_range", "dest_basis", "dest_month_sel", "dest_view", "dest_drill"]:
-            st.session_state.pop(_k, None)
-        st.session_state["_dest_flow_prev"] = flow_choice
+    # Per-flow namespace prefix — every widget/session key in the drilldown tab is
+    # prefixed with this so switching flows never leaks stale state across them.
+    _fk = {"Cocoa Exports": "exp", "Cocoa Imports": "imp", "Cocoa Imports (EU Only)": "eu"}[flow_choice]
 
     _is_exports     = flow_choice == "Cocoa Exports"
     flow_label      = "Exports" if _is_exports else "Imports"
@@ -707,7 +703,7 @@ with tab1:
 
         _dest_all_rep_regions = ["All"] + sorted(df["REPORTER_REGION"].dropna().unique())
         with dest_fc1:
-            dest_rep_region = st.selectbox("Reporter Region", _dest_all_rep_regions, index=0, key="dest_rep_region")
+            dest_rep_region = st.selectbox("Reporter Region", _dest_all_rep_regions, index=0, key=f"{_fk}_dest_rep_region")
 
         _dest_reporters_scope = (
             sorted(df["REPORTER"].dropna().unique()) if dest_rep_region == "All"
@@ -719,7 +715,7 @@ with tab1:
                 else [r for r in ["United States"] if r in _dest_reporters_scope]
             ) or _dest_reporters_scope[:1]
             dest_reporters = st.multiselect(
-                "Reporter", _dest_reporters_scope, default=_dest_rep_default, key="dest_reporters",
+                "Reporter", _dest_reporters_scope, default=_dest_rep_default, key=f"{_fk}_dest_reporters",
             )
 
         _dest_active_reps = dest_reporters or _dest_reporters_scope
@@ -738,38 +734,38 @@ with tab1:
 
         _dest_all_types = sorted(_dest_df_rep["COMMODITY_TAG"].dropna().unique()) if "COMMODITY_TAG" in _dest_df_rep.columns else []
         with dest_fc3:
-            dest_tags = st.multiselect("Type", _dest_all_types, default=_dest_all_types, key="dest_tags") if _dest_all_types else []
+            dest_tags = st.multiselect("Type", _dest_all_types, default=_dest_all_types, key=f"{_fk}_dest_tags") if _dest_all_types else []
 
         _dest_all_regions = sorted(_dest_df_rep["REGION"].dropna().unique())
         with dest_fc4:
-            dest_partner_region = st.selectbox("Partner Region", ["All"] + _dest_all_regions, index=0, key="dest_partner_region")
+            dest_partner_region = st.selectbox("Partner Region", ["All"] + _dest_all_regions, index=0, key=f"{_fk}_dest_partner_region")
 
         _dest_partners_scope = (
             sorted(_dest_df_rep["PARTNER"].dropna().unique()) if dest_partner_region == "All"
             else sorted(_dest_df_rep[_dest_df_rep["REGION"] == dest_partner_region]["PARTNER"].dropna().unique())
         )
         with dest_fc5:
-            dest_partners = st.multiselect("Partners", _dest_partners_scope, default=_dest_partners_scope, key="dest_partners")
+            dest_partners = st.multiselect("Partners", _dest_partners_scope, default=_dest_partners_scope, key=f"{_fk}_dest_partners")
 
         _dest_all_cy = sorted(_dest_df_rep["CROP_YEAR"].dropna().unique())
         if len(_dest_all_cy) >= 2:
             dest_cy_range = st.select_slider(
                 "Crop Year Range", options=_dest_all_cy,
                 value=(_dest_all_cy[max(0, len(_dest_all_cy) - 6)], _dest_all_cy[-1]),
-                key="dest_cy_range",
+                key=f"{_fk}_dest_cy_range",
             )
             dest_active_cy = [cy for cy in _dest_all_cy if dest_cy_range[0] <= cy <= dest_cy_range[1]]
         else:
             dest_active_cy = _dest_all_cy
 
         dest_basis = st.radio(
-            "Basis", ["YTD Basis","Full Year Basis"], horizontal=True, key="dest_basis",
+            "Basis", ["YTD Basis","Full Year Basis"], horizontal=True, key=f"{_fk}_dest_basis",
             help=f"YTD = {MONTH_ORDER[0]}\u2013{_dest_cutoff_label} (common cutoff)  \u00b7  Full Year = all crop months",
         )
 
         dest_month_sel = st.multiselect(
             "Filter by Crop Month (optional \u2014 default = all)",
-            options=MONTH_ORDER, default=[], key="dest_month_sel",
+            options=MONTH_ORDER, default=[], key=f"{_fk}_dest_month_sel",
         )
         _dest_active_months = dest_month_sel if dest_month_sel else MONTH_ORDER
 
@@ -812,13 +808,13 @@ with tab1:
             _dest_piv_pct = _dest_piv.div(_dest_piv.sum(axis=1), axis=0) * 100
             _dest_cya     = _dest_piv.index.tolist()
 
-            _drill_key = "dest_drill"
+            _drill_key = f"{_fk}_dest_drill"
             if _drill_key not in st.session_state:
                 st.session_state[_drill_key] = None
 
             _reg_color = {reg: _PAL[i % len(_PAL)] for i, reg in enumerate(_dest_regions_ord)}
 
-            _dest_view = st.radio("View", ["By Year","By Month"], horizontal=True, key="dest_view")
+            _dest_view = st.radio("View", ["By Year","By Month"], horizontal=True, key=f"{_fk}_dest_view")
 
             if _dest_view == "By Year":
                 dc_l, dc_r = st.columns(2)
@@ -842,7 +838,7 @@ with tab1:
                         legend=dict(orientation="h", y=1.02, x=0, font=dict(size=9, color=_TC), bgcolor="rgba(255,255,255,0.9)"),
                         margin=dict(t=25, b=7, l=4, r=4), clickmode="event", **_D,
                     )
-                    _abs_sel = st.plotly_chart(fig_dest_abs, use_container_width=True, on_select="rerun", key="dest_abs_chart")
+                    _abs_sel = st.plotly_chart(fig_dest_abs, use_container_width=True, on_select="rerun", key=f"{_fk}_dest_abs_chart")
                     _abs_pts = (_abs_sel or {}).get("selection", {}).get("points", [])
                     if _abs_pts:
                         _clicked_reg = _dest_regions_ord[_abs_pts[0].get("curve_number", 0)]
@@ -876,10 +872,10 @@ with tab1:
                     st.plotly_chart(fig_dest_pct, use_container_width=True)
 
             else:  # By Month
-                _drill_mo_key = "dest_drill_mo"
+                _drill_mo_key = f"{_fk}_dest_drill_mo"
                 if _drill_mo_key not in st.session_state:
                     st.session_state[_drill_mo_key] = None
-                _dest_cy_mo = st.selectbox("Crop Year", sorted(_dest_cya, reverse=True), key="dest_cy_month_sel")
+                _dest_cy_mo = st.selectbox("Crop Year", sorted(_dest_cya, reverse=True), key=f"{_fk}_dest_cy_month_sel")
                 _dest_mo_agg = (
                     dest_dff[dest_dff["CROP_YEAR"] == _dest_cy_mo]
                     .groupby(["CROP_MONTH_NUM","REGION"])["BAGS"].sum().reset_index()
@@ -909,7 +905,7 @@ with tab1:
                         legend=dict(orientation="h", y=1.02, x=0, font=dict(size=9, color=_TC), bgcolor="rgba(255,255,255,0.9)"),
                         margin=dict(t=25, b=7, l=4, r=4), clickmode="event", **_D,
                     )
-                    _mo_abs_sel = st.plotly_chart(fig_mo_abs, use_container_width=True, on_select="rerun", key="dest_mo_abs_chart")
+                    _mo_abs_sel = st.plotly_chart(fig_mo_abs, use_container_width=True, on_select="rerun", key=f"{_fk}_dest_mo_abs_chart")
                     _mo_abs_pts = (_mo_abs_sel or {}).get("selection", {}).get("points", [])
                     if _mo_abs_pts:
                         _clicked_mo_reg = _dest_regions_ord[_mo_abs_pts[0].get("curve_number", 0)]
@@ -1075,7 +1071,7 @@ with tab1:
             # Rolling window expander
             with st.expander("Rolling Window", expanded=False):
                 st.markdown("<hr>", unsafe_allow_html=True)
-                dest_roll_choice = st.radio("Rolling Window", ["1m","3m","6m","12m"], index=3, horizontal=True, key="dest_roll")
+                dest_roll_choice = st.radio("Rolling Window", ["1m","3m","6m","12m"], index=3, horizontal=True, key=f"{_fk}_dest_roll")
                 dest_window = {"1m":1,"3m":3,"6m":6,"12m":12}[dest_roll_choice]
                 st.markdown(lbl(f"{dest_roll_choice} Rolling {flow_label} by Region ({unit_label})", _dest_sub), unsafe_allow_html=True)
                 _dest_roll_agg = dest_dff_roll.groupby(["DATE","REGION"])["BAGS"].sum().reset_index().sort_values("DATE")
