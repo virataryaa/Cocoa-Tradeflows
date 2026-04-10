@@ -24,5 +24,15 @@ echo [3/3] Cocoa Imports (EU)...
 
 echo.
 echo ============================================================
+echo  Pushing data to GitHub...
+echo ============================================================
+cd /d "C:\Users\virat.arya\ETG\SoftsDatabase - Documents\Database\Hardmine\Fundamental\TDM\Cocoa Flows"
+git add files/data/*.parquet
+git commit -m "data: daily ingest update %DATE%"
+git push
+echo  GitHub push complete.
+
+echo.
+echo ============================================================
 echo  Pipeline complete  ^|  %DATE% %TIME%
 echo ============================================================
