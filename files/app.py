@@ -150,6 +150,14 @@ with tab1:
         label_visibility="collapsed",
     )
 
+    # Reset drilldown filters when flow changes so stale partners/reporters don't
+    # carry over across flows (e.g. "United States" from Imports into EU Only)
+    if st.session_state.get("_dest_flow_prev") != flow_choice:
+        for _k in ["dest_reporters", "dest_tags", "dest_partners", "dest_partner_region",
+                   "dest_cy_range", "dest_basis", "dest_month_sel", "dest_view", "dest_drill"]:
+            st.session_state.pop(_k, None)
+        st.session_state["_dest_flow_prev"] = flow_choice
+
     _is_exports     = flow_choice == "Cocoa Exports"
     flow_label      = "Exports" if _is_exports else "Imports"
     _dest_noun      = "Destination" if _is_exports else "Origin"
@@ -1015,7 +1023,12 @@ with tab1:
                     unsafe_allow_html=True,
                 )
                 _dr_all_cy = dest_dff[dest_dff["REGION"] == _dr_reg].groupby(["PARTNER","CROP_YEAR"])["BAGS"].sum().reset_index()
-                _dr_top    = dest_dff[(dest_dff["REGION"] == _dr_reg) & (dest_dff["CROP_YEAR"] == _dr_cy)].groupby("PARTNER")["BAGS"].sum().sort_values(ascending=False).head(12).index.tolist()
+                _dr_reg_dff = dest_dff[dest_dff["REGION"] == _dr_reg]
+                _dr_top = _dr_reg_dff[_dr_reg_dff["CROP_YEAR"] == _dr_cy].groupby("PARTNER")["BAGS"].sum().sort_values(ascending=False).head(12).index.tolist()
+                # Fallback: if clicked crop year has no data, use latest available year
+                if not _dr_top and not _dr_reg_dff.empty:
+                    _dr_fallback_cy = sorted(_dr_reg_dff["CROP_YEAR"].unique())[-1]
+                    _dr_top = _dr_reg_dff[_dr_reg_dff["CROP_YEAR"] == _dr_fallback_cy].groupby("PARTNER")["BAGS"].sum().sort_values(ascending=False).head(12).index.tolist()
                 _dr_all_cy = _dr_all_cy[_dr_all_cy["PARTNER"].isin(_dr_top)]
                 if not _dr_all_cy.empty:
                     _dr_piv = (
