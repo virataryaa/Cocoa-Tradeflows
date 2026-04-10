@@ -6,3 +6,4 @@ duckdb
 pyarrow
 requests
 country_converter
+matplotlib
