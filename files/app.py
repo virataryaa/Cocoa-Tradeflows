@@ -824,6 +824,7 @@ with tab1:
             _reg_color = {reg: _PAL[i % len(_PAL)] for i, reg in enumerate(_dest_regions_ord)}
 
             _dest_view = st.radio("View", ["By Year","By Month"], horizontal=True, key=f"{_fk}_dest_view")
+            _show_all_partners = st.checkbox("Show all partners", key=f"{_fk}_dest_show_all_partners", value=False, help="Show partner breakdown for all regions without clicking a bar")
 
             if _dest_view == "By Year":
                 dc_l, dc_r = st.columns(2)
@@ -947,23 +948,40 @@ with tab1:
 
                 # By Month drill-down
                 _drill_mo = st.session_state[_drill_mo_key]
-                if _drill_mo:
-                    _dmo_color = _reg_color.get(_drill_mo, _PAL[0])
+                if _drill_mo or _show_all_partners:
+                    _all_mo_mode = _show_all_partners and not _drill_mo
+                    if _all_mo_mode:
+                        _dmo_color = "#888888"
+                        _dmo_r, _dmo_g, _dmo_b = 136, 136, 136
+                        _dmo_reg_label = "All Regions"
+                        _dmo_banner_title = f"All Regions \u00b7 {_dest_cy_mo} \u00b7 by Month"
+                        _dmo_sub_note = "Uncheck 'Show all partners' to clear"
+                    else:
+                        _dmo_color = _reg_color.get(_drill_mo, _PAL[0])
+                        _dmo_r, _dmo_g, _dmo_b = int(_dmo_color[1:3], 16), int(_dmo_color[3:5], 16), int(_dmo_color[5:7], 16)
+                        _dmo_reg_label = _drill_mo
+                        _dmo_banner_title = f"Drill-down: <b>{_drill_mo}</b> \u00b7 {_dest_cy_mo} \u00b7 by Month"
+                        _dmo_sub_note = "Click same segment again to clear"
                     st.markdown(
-                        f"<div style='background:rgba({int(_dmo_color[1:3],16)},"
-                        f"{int(_dmo_color[3:5],16)},{int(_dmo_color[5:7],16)},0.08);"
+                        f"<div style='background:rgba({_dmo_r},{_dmo_g},{_dmo_b},0.08);"
                         f"border-left:3px solid {_dmo_color};border-radius:6px;"
                         f"padding:8px 14px;margin:8px 0;display:flex;align-items:center;justify-content:space-between'>"
                         f"<span style='font-size:0.75rem;font-weight:600;color:{_dmo_color}'>"
-                        f"Drill-down: <b>{_drill_mo}</b> \u00b7 {_dest_cy_mo} \u00b7 by Month"
+                        f"{_dmo_banner_title}"
                         f"</span><span style='font-size:0.65rem;color:#8e8e93;font-style:italic'>"
-                        f"Click same segment again to clear</span></div>",
+                        f"{_dmo_sub_note}</span></div>",
                         unsafe_allow_html=True,
                     )
-                    _dmo_data = (
-                        dest_dff[(dest_dff["CROP_YEAR"] == _dest_cy_mo) & (dest_dff["REGION"] == _drill_mo)]
-                        .groupby(["CROP_MONTH_NUM","PARTNER"])["BAGS"].sum().reset_index()
-                    )
+                    if _all_mo_mode:
+                        _dmo_data = (
+                            dest_dff[dest_dff["CROP_YEAR"] == _dest_cy_mo]
+                            .groupby(["CROP_MONTH_NUM","PARTNER"])["BAGS"].sum().reset_index()
+                        )
+                    else:
+                        _dmo_data = (
+                            dest_dff[(dest_dff["CROP_YEAR"] == _dest_cy_mo) & (dest_dff["REGION"] == _drill_mo)]
+                            .groupby(["CROP_MONTH_NUM","PARTNER"])["BAGS"].sum().reset_index()
+                        )
                     _dmo_data["CROP_MONTH"] = _dmo_data["CROP_MONTH_NUM"].map(NUM_TO_MONTH)
                     _dmo_top  = _dmo_data.groupby("PARTNER")["BAGS"].sum().nlargest(12).index.tolist()
                     _dmo_data = _dmo_data[_dmo_data["PARTNER"].isin(_dmo_top)]
@@ -977,7 +995,7 @@ with tab1:
                         _dmo_piv_pct = _dmo_piv.div(_dmo_piv.sum(axis=1).replace(0, 1), axis=0) * 100
                         dmo_c1, dmo_c2 = st.columns(2)
                         with dmo_c1:
-                            st.markdown(lbl(f"{_drill_mo} Partners by Month \u00b7 {_dest_cy_mo} ({unit_label})", f"{', '.join(_dest_active_reps)} \u00b7 {_drill_mo} \u00b7 {_dest_cy_mo}"), unsafe_allow_html=True)
+                            st.markdown(lbl(f"{_dmo_reg_label} Partners by Month \u00b7 {_dest_cy_mo} ({unit_label})", f"{', '.join(_dest_active_reps)} \u00b7 {_dmo_reg_label} \u00b7 {_dest_cy_mo}"), unsafe_allow_html=True)
                             fig_dmo_abs = go.Figure()
                             for j, partner in enumerate(_dmo_piv.columns):
                                 fig_dmo_abs.add_trace(go.Bar(
@@ -994,7 +1012,7 @@ with tab1:
                                 margin=dict(t=25, b=7, l=4, r=4), **_D)
                             st.plotly_chart(fig_dmo_abs, use_container_width=True)
                         with dmo_c2:
-                            st.markdown(lbl(f"{_drill_mo} Partners \u00b7 Share by Month (%)", f"{', '.join(_dest_active_reps)} \u00b7 {_drill_mo} \u00b7 {_dest_cy_mo}"), unsafe_allow_html=True)
+                            st.markdown(lbl(f"{_dmo_reg_label} Partners \u00b7 Share by Month (%)", f"{', '.join(_dest_active_reps)} \u00b7 {_dmo_reg_label} \u00b7 {_dest_cy_mo}"), unsafe_allow_html=True)
                             fig_dmo_pct = go.Figure()
                             for j, partner in enumerate(_dmo_piv_pct.columns):
                                 fig_dmo_pct.add_trace(go.Bar(
@@ -1012,28 +1030,45 @@ with tab1:
 
             # By Year drill-down panel
             _drill = st.session_state[_drill_key]
-            if _drill and _dest_view == "By Year":
-                _dr_reg   = _drill["region"]
-                _dr_cy    = _drill["cy"]
-                _dr_color = _reg_color.get(_dr_reg, _PAL[0])
+            if (_drill or _show_all_partners) and _dest_view == "By Year":
+                _all_yr_mode = _show_all_partners and not _drill
+                if _all_yr_mode:
+                    _dr_reg   = None
+                    _dr_cy    = None
+                    _dr_color = "#888888"
+                    _dr_r, _dr_g, _dr_b = 136, 136, 136
+                    _dr_reg_label    = "All Regions"
+                    _dr_banner_title = "All Regions \u2014 All Partners"
+                    _dr_sub_note     = "Uncheck 'Show all partners' to clear"
+                else:
+                    _dr_reg   = _drill["region"]
+                    _dr_cy    = _drill["cy"]
+                    _dr_color = _reg_color.get(_dr_reg, _PAL[0])
+                    _dr_r, _dr_g, _dr_b = int(_dr_color[1:3], 16), int(_dr_color[3:5], 16), int(_dr_color[5:7], 16)
+                    _dr_reg_label    = _dr_reg
+                    _dr_banner_title = f"\u21b3 Drill-down: <b>{_dr_reg}</b> \u00b7 {_dr_cy}"
+                    _dr_sub_note     = "Click same segment again to clear"
                 st.markdown(
-                    f"<div style='background:rgba({int(_dr_color[1:3],16)},"
-                    f"{int(_dr_color[3:5],16)},{int(_dr_color[5:7],16)},0.08);"
+                    f"<div style='background:rgba({_dr_r},{_dr_g},{_dr_b},0.08);"
                     f"border-left:3px solid {_dr_color};border-radius:6px;"
                     f"padding:8px 14px;margin:8px 0;display:flex;align-items:center;justify-content:space-between'>"
                     f"<span style='font-size:0.75rem;font-weight:600;color:{_dr_color}'>"
-                    f"\u21b3 Drill-down: <b>{_dr_reg}</b> \u00b7 {_dr_cy}"
+                    f"{_dr_banner_title}"
                     f"</span><span style='font-size:0.65rem;color:#8e8e93;font-style:italic'>"
-                    f"Click same segment again to clear</span></div>",
+                    f"{_dr_sub_note}</span></div>",
                     unsafe_allow_html=True,
                 )
-                _dr_all_cy = dest_dff[dest_dff["REGION"] == _dr_reg].groupby(["PARTNER","CROP_YEAR"])["BAGS"].sum().reset_index()
-                _dr_reg_dff = dest_dff[dest_dff["REGION"] == _dr_reg]
-                _dr_top = _dr_reg_dff[_dr_reg_dff["CROP_YEAR"] == _dr_cy].groupby("PARTNER")["BAGS"].sum().sort_values(ascending=False).head(12).index.tolist()
-                # Fallback: if clicked crop year has no data, use latest available year
-                if not _dr_top and not _dr_reg_dff.empty:
-                    _dr_fallback_cy = sorted(_dr_reg_dff["CROP_YEAR"].unique())[-1]
-                    _dr_top = _dr_reg_dff[_dr_reg_dff["CROP_YEAR"] == _dr_fallback_cy].groupby("PARTNER")["BAGS"].sum().sort_values(ascending=False).head(12).index.tolist()
+                if _all_yr_mode:
+                    _dr_all_cy = dest_dff.groupby(["PARTNER","CROP_YEAR"])["BAGS"].sum().reset_index()
+                    _dr_top    = dest_dff.groupby("PARTNER")["BAGS"].sum().sort_values(ascending=False).head(12).index.tolist()
+                else:
+                    _dr_all_cy = dest_dff[dest_dff["REGION"] == _dr_reg].groupby(["PARTNER","CROP_YEAR"])["BAGS"].sum().reset_index()
+                    _dr_reg_dff = dest_dff[dest_dff["REGION"] == _dr_reg]
+                    _dr_top = _dr_reg_dff[_dr_reg_dff["CROP_YEAR"] == _dr_cy].groupby("PARTNER")["BAGS"].sum().sort_values(ascending=False).head(12).index.tolist()
+                    # Fallback: if clicked crop year has no data, use latest available year
+                    if not _dr_top and not _dr_reg_dff.empty:
+                        _dr_fallback_cy = sorted(_dr_reg_dff["CROP_YEAR"].unique())[-1]
+                        _dr_top = _dr_reg_dff[_dr_reg_dff["CROP_YEAR"] == _dr_fallback_cy].groupby("PARTNER")["BAGS"].sum().sort_values(ascending=False).head(12).index.tolist()
                 _dr_all_cy = _dr_all_cy[_dr_all_cy["PARTNER"].isin(_dr_top)]
                 if not _dr_all_cy.empty:
                     _dr_piv = (
@@ -1044,7 +1079,7 @@ with tab1:
                     _dr_piv_pct = _dr_piv.div(_dr_piv.sum(axis=1), axis=0) * 100
                     dd_c1, dd_c2 = st.columns(2)
                     with dd_c1:
-                        st.markdown(lbl(f"{_dr_reg} Partners \u00b7 All Crop Years ({unit_label})", f"{', '.join(_dest_active_reps)} \u00b7 {_dr_reg}"), unsafe_allow_html=True)
+                        st.markdown(lbl(f"{_dr_reg_label} Partners \u00b7 All Crop Years ({unit_label})", f"{', '.join(_dest_active_reps)} \u00b7 {_dr_reg_label}"), unsafe_allow_html=True)
                         fig_dd_abs = go.Figure()
                         for j, partner in enumerate(_dr_piv.columns):
                             fig_dd_abs.add_trace(go.Bar(
@@ -1061,7 +1096,7 @@ with tab1:
                             margin=dict(t=25, b=7, l=4, r=4), **_D)
                         st.plotly_chart(fig_dd_abs, use_container_width=True)
                     with dd_c2:
-                        st.markdown(lbl(f"{_dr_reg} Partners \u00b7 Share by Crop Year (%)", f"{', '.join(_dest_active_reps)} \u00b7 {_dr_reg}"), unsafe_allow_html=True)
+                        st.markdown(lbl(f"{_dr_reg_label} Partners \u00b7 Share by Crop Year (%)", f"{', '.join(_dest_active_reps)} \u00b7 {_dr_reg_label}"), unsafe_allow_html=True)
                         fig_dd_pct = go.Figure()
                         for j, partner in enumerate(_dr_piv_pct.columns):
                             fig_dd_pct.add_trace(go.Bar(
