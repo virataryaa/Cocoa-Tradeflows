@@ -1190,11 +1190,28 @@ with tab1:
                     .pivot(index="PARTNER", columns="CROP_YEAR", values="BAGS").fillna(0)
                 )
                 _dest_tbl = _dest_tbl.loc[_dest_tbl.sum(axis=1).sort_values(ascending=False).index]
+                # Rest of World row
+                _dest_row = (
+                    _dest_part_agg[~_dest_part_agg["PARTNER"].isin(_dest_top10)]
+                    .groupby("CROP_YEAR")["BAGS"].sum()
+                    .reindex(_dest_tbl.columns, fill_value=0)
+                )
+                _dest_row.name = "Rest of World"
+                _dest_tbl = pd.concat([_dest_tbl, _dest_row.to_frame().T])
+                def _style_dest_tbl(df):
+                    top_rows = df.index[:-1]
+                    styled = df.style.background_gradient(cmap="Blues", axis=None, subset=pd.IndexSlice[top_rows, :])
+                    styled = styled.apply(
+                        lambda _: ["font-weight:600; background-color:#f0f0f0"] * len(df.columns),
+                        subset=pd.IndexSlice[["Rest of World"], :], axis=1,
+                    )
+                    styled = styled.format(f"{{:{_num_fmt}}}")
+                    styled = styled.set_properties(**{"text-align":"center","font-size":"8px"})
+                    styled = styled.set_table_styles([{"selector":"th","props":[("text-align","center"),("font-size","8px"),("font-weight","600")]}])
+                    return styled
                 st.dataframe(
-                    _dest_tbl.style.background_gradient(cmap="Blues", axis=None).format(f"{{:{_num_fmt}}}")
-                    .set_properties(**{"text-align":"center","font-size":"8px"})
-                    .set_table_styles([{"selector":"th","props":[("text-align","center"),("font-size","8px"),("font-weight","600")]}]),
-                    use_container_width=True, height=min(35 * (len(_dest_tbl.index) + 2), 350),
+                    _style_dest_tbl(_dest_tbl),
+                    use_container_width=True, height=min(35 * (len(_dest_tbl.index) + 2), 380),
                 )
 
             # Monthly partner breakdown
