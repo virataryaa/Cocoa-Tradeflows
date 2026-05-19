@@ -1198,7 +1198,7 @@ with tab1:
                 )
 
             # Monthly partner breakdown
-            with st.expander("Monthly Breakdown — Top 20 Partners", expanded=False):
+            with st.expander("Monthly Breakdown — Top 10 Partners + Rest of World", expanded=False):
                 _mo_cy_opts = sorted(dest_dff["CROP_YEAR"].dropna().unique())
                 if _mo_cy_opts:
                     _mo_sel_cy = st.selectbox(
@@ -1207,19 +1207,38 @@ with tab1:
                     )
                     _mo_dff     = dest_dff[dest_dff["CROP_YEAR"] == _mo_sel_cy]
                     _mo_agg     = _mo_dff.groupby(["PARTNER","CROP_MONTH_NUM"])["BAGS"].sum().reset_index()
-                    _mo_top20   = _mo_dff.groupby("PARTNER")["BAGS"].sum().nlargest(20).index.tolist()
-                    _mo_agg     = _mo_agg[_mo_agg["PARTNER"].isin(_mo_top20)]
-                    _mo_tbl     = _mo_agg.pivot(index="PARTNER", columns="CROP_MONTH_NUM", values="BAGS").fillna(0)
+                    _mo_top10   = _mo_dff.groupby("PARTNER")["BAGS"].sum().nlargest(10).index.tolist()
+                    _mo_top_agg = _mo_agg[_mo_agg["PARTNER"].isin(_mo_top10)]
+                    _mo_tbl     = _mo_top_agg.pivot(index="PARTNER", columns="CROP_MONTH_NUM", values="BAGS").fillna(0)
                     _mo_tbl.columns = [NUM_TO_MONTH.get(c, c) for c in _mo_tbl.columns]
                     _mo_col_ord = [m for m in MONTH_ORDER if m in _mo_tbl.columns]
                     _mo_tbl     = _mo_tbl[_mo_col_ord]
                     _mo_tbl     = _mo_tbl.loc[_mo_tbl.sum(axis=1).sort_values(ascending=False).index]
+                    # Rest of World row
+                    _mo_row_agg = _mo_agg[~_mo_agg["PARTNER"].isin(_mo_top10)]
+                    _mo_row_agg = _mo_row_agg.groupby("CROP_MONTH_NUM")["BAGS"].sum().reset_index()
+                    _mo_row     = _mo_row_agg.set_index("CROP_MONTH_NUM")["BAGS"].rename(index=NUM_TO_MONTH)
+                    _mo_row     = _mo_row.reindex(_mo_col_ord, fill_value=0)
+                    _mo_row.name = "Rest of World"
+                    _mo_tbl     = pd.concat([_mo_tbl, _mo_row.to_frame().T])
                     st.caption(f"Values = {_mo_sel_cy} · {unit_label} · Rows ranked by total · Colour: white (low) → dark blue (high)")
+
+                    def _style_monthly(df):
+                        top10_rows = df.index[:-1]
+                        row_styles = pd.DataFrame("", index=df.index, columns=df.columns)
+                        styled = df.style.background_gradient(cmap="Blues", axis=None, subset=pd.IndexSlice[top10_rows, :])
+                        styled = styled.apply(
+                            lambda _: ["font-weight:600; background-color:#f0f0f0"] * len(df.columns),
+                            subset=pd.IndexSlice[["Rest of World"], :], axis=1,
+                        )
+                        styled = styled.format(f"{{:{_num_fmt}}}")
+                        styled = styled.set_properties(**{"text-align":"center","font-size":"8px"})
+                        styled = styled.set_table_styles([{"selector":"th","props":[("text-align","center"),("font-size","8px"),("font-weight","600")]}])
+                        return styled
+
                     st.dataframe(
-                        _mo_tbl.style.background_gradient(cmap="Blues", axis=None).format(f"{{:{_num_fmt}}}")
-                        .set_properties(**{"text-align":"center","font-size":"8px"})
-                        .set_table_styles([{"selector":"th","props":[("text-align","center"),("font-size","8px"),("font-weight","600")]}]),
-                        use_container_width=True, height=min(35 * (len(_mo_tbl.index) + 2), 600),
+                        _style_monthly(_mo_tbl),
+                        use_container_width=True, height=min(35 * (len(_mo_tbl.index) + 2), 500),
                     )
                 else:
                     st.info("No data available.")
