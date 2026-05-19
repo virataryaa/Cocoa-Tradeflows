@@ -1198,12 +1198,19 @@ with tab1:
                 )
                 _dest_row.name = "Rest of World"
                 _dest_tbl = pd.concat([_dest_tbl, _dest_row.to_frame().T])
+                _dest_total = _dest_tbl.sum(axis=0)
+                _dest_total.name = "Total"
+                _dest_tbl = pd.concat([_dest_tbl, _dest_total.to_frame().T])
                 def _style_dest_tbl(df):
-                    top_rows = df.index[:-1]
+                    top_rows = df.index[:-2]
                     styled = df.style.background_gradient(cmap="Blues", axis=None, subset=pd.IndexSlice[top_rows, :])
                     styled = styled.apply(
                         lambda _: ["font-weight:600; background-color:#f0f0f0"] * len(df.columns),
                         subset=pd.IndexSlice[["Rest of World"], :], axis=1,
+                    )
+                    styled = styled.apply(
+                        lambda _: ["font-weight:700; background-color:#e0e0e0; border-top:2px solid #999"] * len(df.columns),
+                        subset=pd.IndexSlice[["Total"], :], axis=1,
                     )
                     styled = styled.format(f"{{:{_num_fmt}}}")
                     styled = styled.set_properties(**{"text-align":"center","font-size":"8px"})
@@ -1238,15 +1245,21 @@ with tab1:
                     _mo_row     = _mo_row.reindex(_mo_col_ord, fill_value=0)
                     _mo_row.name = "Rest of World"
                     _mo_tbl     = pd.concat([_mo_tbl, _mo_row.to_frame().T])
+                    _mo_total   = _mo_tbl.sum(axis=0)
+                    _mo_total.name = "Total"
+                    _mo_tbl     = pd.concat([_mo_tbl, _mo_total.to_frame().T])
                     st.caption(f"Values = {_mo_sel_cy} · {unit_label} · Rows ranked by total · Colour: white (low) → dark blue (high)")
 
                     def _style_monthly(df):
-                        top10_rows = df.index[:-1]
-                        row_styles = pd.DataFrame("", index=df.index, columns=df.columns)
+                        top10_rows = df.index[:-2]
                         styled = df.style.background_gradient(cmap="Blues", axis=None, subset=pd.IndexSlice[top10_rows, :])
                         styled = styled.apply(
                             lambda _: ["font-weight:600; background-color:#f0f0f0"] * len(df.columns),
                             subset=pd.IndexSlice[["Rest of World"], :], axis=1,
+                        )
+                        styled = styled.apply(
+                            lambda _: ["font-weight:700; background-color:#e0e0e0; border-top:2px solid #999"] * len(df.columns),
+                            subset=pd.IndexSlice[["Total"], :], axis=1,
                         )
                         styled = styled.format(f"{{:{_num_fmt}}}")
                         styled = styled.set_properties(**{"text-align":"center","font-size":"8px"})
