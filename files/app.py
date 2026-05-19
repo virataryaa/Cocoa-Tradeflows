@@ -1197,6 +1197,33 @@ with tab1:
                     use_container_width=True, height=min(35 * (len(_dest_tbl.index) + 2), 350),
                 )
 
+            # Monthly partner breakdown
+            with st.expander("Monthly Breakdown — Top 20 Partners", expanded=False):
+                _mo_cy_opts = sorted(dest_dff["CROP_YEAR"].dropna().unique())
+                if _mo_cy_opts:
+                    _mo_sel_cy = st.selectbox(
+                        "Crop Year", _mo_cy_opts, index=len(_mo_cy_opts) - 1,
+                        key=f"{_fk}_monthly_cy",
+                    )
+                    _mo_dff     = dest_dff[dest_dff["CROP_YEAR"] == _mo_sel_cy]
+                    _mo_agg     = _mo_dff.groupby(["PARTNER","CROP_MONTH_NUM"])["BAGS"].sum().reset_index()
+                    _mo_top20   = _mo_dff.groupby("PARTNER")["BAGS"].sum().nlargest(20).index.tolist()
+                    _mo_agg     = _mo_agg[_mo_agg["PARTNER"].isin(_mo_top20)]
+                    _mo_tbl     = _mo_agg.pivot(index="PARTNER", columns="CROP_MONTH_NUM", values="BAGS").fillna(0)
+                    _mo_tbl.columns = [NUM_TO_MONTH.get(c, c) for c in _mo_tbl.columns]
+                    _mo_col_ord = [m for m in MONTH_ORDER if m in _mo_tbl.columns]
+                    _mo_tbl     = _mo_tbl[_mo_col_ord]
+                    _mo_tbl     = _mo_tbl.loc[_mo_tbl.sum(axis=1).sort_values(ascending=False).index]
+                    st.caption(f"Values = {_mo_sel_cy} · {unit_label} · Rows ranked by total · Colour: white (low) → dark blue (high)")
+                    st.dataframe(
+                        _mo_tbl.style.background_gradient(cmap="Blues", axis=None).format(f"{{:{_num_fmt}}}")
+                        .set_properties(**{"text-align":"center","font-size":"8px"})
+                        .set_table_styles([{"selector":"th","props":[("text-align","center"),("font-size","8px"),("font-weight","600")]}]),
+                        use_container_width=True, height=min(35 * (len(_mo_tbl.index) + 2), 600),
+                    )
+                else:
+                    st.info("No data available.")
+
     st.markdown("<hr>", unsafe_allow_html=True)
     st.caption(f"Cocoa TDM Trade Flow Dashboard  \u00b7  ETG Softs  \u00b7  Unit: {unit_label}  \u00b7  BEQ: Beans\u00d71.00, Liquor\u00d71.22, Butter\u00d72.70  \u00b7  1 Lot = 10 MT")
 
