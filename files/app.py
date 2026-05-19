@@ -1218,7 +1218,7 @@ with tab1:
                     return styled
                 st.dataframe(
                     _style_dest_tbl(_dest_tbl),
-                    use_container_width=True, height=min(35 * (len(_dest_tbl.index) + 2), 380),
+                    use_container_width=True, height=38 * (len(_dest_tbl.index) + 1) + 10,
                 )
 
             # Monthly partner breakdown
@@ -1268,7 +1268,7 @@ with tab1:
 
                     st.dataframe(
                         _style_monthly(_mo_tbl),
-                        use_container_width=True, height=min(35 * (len(_mo_tbl.index) + 2), 500),
+                        use_container_width=True, height=38 * (len(_mo_tbl.index) + 1) + 10,
                     )
                 else:
                     st.info("No data available.")
