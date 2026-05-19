@@ -1181,10 +1181,10 @@ with tab1:
                         )
 
             # Destination table
-            with st.expander("Destination Table \u2014 Top 10 Partners", expanded=False):
+            with st.expander("Destination Table \u2014 Top 15 Partners", expanded=False):
                 st.caption(f"Values = {_basis_label} {unit_label}  \u00b7  Rows ranked by total  \u00b7  Colour: white (low) \u2192 dark blue (high)")
                 _dest_part_agg = dest_dff.groupby(["PARTNER","CROP_YEAR"])["BAGS"].sum().reset_index()
-                _dest_top10    = _dest_part_agg.groupby("PARTNER")["BAGS"].sum().nlargest(10).index.tolist()
+                _dest_top10    = _dest_part_agg.groupby("PARTNER")["BAGS"].sum().nlargest(15).index.tolist()
                 _dest_tbl      = (
                     _dest_part_agg[_dest_part_agg["PARTNER"].isin(_dest_top10)]
                     .pivot(index="PARTNER", columns="CROP_YEAR", values="BAGS").fillna(0)
@@ -1222,7 +1222,7 @@ with tab1:
                 )
 
             # Monthly partner breakdown
-            with st.expander("Monthly Breakdown — Top 10 Partners + Rest of World", expanded=False):
+            with st.expander("Monthly Breakdown — Top 15 Partners + Rest of World", expanded=False):
                 _mo_cy_opts = sorted(dest_dff["CROP_YEAR"].dropna().unique())
                 if _mo_cy_opts:
                     _mo_sel_cy = st.selectbox(
@@ -1231,7 +1231,7 @@ with tab1:
                     )
                     _mo_dff     = dest_dff[dest_dff["CROP_YEAR"] == _mo_sel_cy]
                     _mo_agg     = _mo_dff.groupby(["PARTNER","CROP_MONTH_NUM"])["BAGS"].sum().reset_index()
-                    _mo_top10   = _mo_dff.groupby("PARTNER")["BAGS"].sum().nlargest(10).index.tolist()
+                    _mo_top10   = _mo_dff.groupby("PARTNER")["BAGS"].sum().nlargest(15).index.tolist()
                     _mo_top_agg = _mo_agg[_mo_agg["PARTNER"].isin(_mo_top10)]
                     _mo_tbl     = _mo_top_agg.pivot(index="PARTNER", columns="CROP_MONTH_NUM", values="BAGS").fillna(0)
                     _mo_tbl.columns = [NUM_TO_MONTH.get(c, c) for c in _mo_tbl.columns]
