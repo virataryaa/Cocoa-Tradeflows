@@ -190,6 +190,28 @@ with tab1:
 
     st_ov, st_dest = st.tabs(["Overview", "Drilldown"])
 
+    # ── Shared filter state (syncs Overview ↔ Drilldown) ──────────────────────
+    _sf = f"{_fk}_sf"
+    _all_reps_sf    = sorted(df["REPORTER"].dropna().unique())
+    _rep_default_sf = (
+        [r for r in ["Cote d'Ivoire"] if r in _all_reps_sf] if _is_exports
+        else [r for r in ["United States"] if r in _all_reps_sf]
+    ) or _all_reps_sf
+    _all_tags_sf    = sorted(df["COMMODITY_TAG"].dropna().unique()) if "COMMODITY_TAG" in df.columns else []
+    _all_partners_sf = sorted(df["PARTNER"].dropna().unique())
+    for _k, _v in [
+        (f"{_sf}_rep_region",     "All"),
+        (f"{_sf}_reporters",      _rep_default_sf),
+        (f"{_sf}_tags",           _all_tags_sf),
+        (f"{_sf}_partner_region", "All"),
+        (f"{_sf}_partners",       _all_partners_sf),
+    ]:
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    def _sync_to_sf(widget_key, sf_key):
+        st.session_state[sf_key] = st.session_state[widget_key]
+
     # =========================================================================
     # OVERVIEW SUBTAB
     # =========================================================================
@@ -199,27 +221,54 @@ with tab1:
 
             all_reporter_regions = ["All"] + sorted(df["REPORTER_REGION"].dropna().unique())
             with fc0:
-                sel_rep_region = st.selectbox("Reporter Region", all_reporter_regions, index=0)
+                _ov_rr_key = f"{_fk}_ov_rep_region"
+                _sf_rr = st.session_state.get(f"{_sf}_rep_region", "All")
+                if _sf_rr not in all_reporter_regions: _sf_rr = "All"
+                st.session_state[_ov_rr_key] = _sf_rr
+                sel_rep_region = st.selectbox("Reporter Region", all_reporter_regions,
+                    key=_ov_rr_key,
+                    on_change=_sync_to_sf, args=(_ov_rr_key, f"{_sf}_rep_region"))
 
             reporters_in_scope = (
                 sorted(df["REPORTER"].dropna().unique()) if sel_rep_region == "All"
                 else sorted(df[df["REPORTER_REGION"] == sel_rep_region]["REPORTER"].dropna().unique())
             )
             with fc1:
-                _rep_default = (
-                    [r for r in ["Cote d'Ivoire"] if r in reporters_in_scope] if _is_exports
-                    else [r for r in ["United States"] if r in reporters_in_scope]
-                ) or reporters_in_scope
-                sel_reporters = st.multiselect("Reporter", reporters_in_scope, default=_rep_default)
+                _ov_rep_key = f"{_fk}_ov_reporters"
+                _sf_rep = [r for r in st.session_state.get(f"{_sf}_reporters", []) if r in reporters_in_scope]
+                if not _sf_rep:
+                    _sf_rep = (
+                        [r for r in ["Cote d'Ivoire"] if r in reporters_in_scope] if _is_exports
+                        else [r for r in ["United States"] if r in reporters_in_scope]
+                    ) or reporters_in_scope
+                st.session_state[_ov_rep_key] = _sf_rep
+                sel_reporters = st.multiselect("Reporter", reporters_in_scope,
+                    key=_ov_rep_key,
+                    on_change=_sync_to_sf, args=(_ov_rep_key, f"{_sf}_reporters"))
 
             all_tags = sorted(df["COMMODITY_TAG"].dropna().unique()) if "COMMODITY_TAG" in df.columns else []
             with fc2:
-                _tag_default = [t for t in ["Beans"] if t in all_tags] or all_tags
-                sel_tags = st.multiselect("Type", all_tags, default=_tag_default) if all_tags else []
+                if all_tags:
+                    _ov_tag_key = f"{_fk}_ov_tags"
+                    _sf_tag = [t for t in st.session_state.get(f"{_sf}_tags", []) if t in all_tags]
+                    if not _sf_tag:
+                        _sf_tag = [t for t in ["Beans"] if t in all_tags] or all_tags
+                    st.session_state[_ov_tag_key] = _sf_tag
+                    sel_tags = st.multiselect("Type", all_tags,
+                        key=_ov_tag_key,
+                        on_change=_sync_to_sf, args=(_ov_tag_key, f"{_sf}_tags"))
+                else:
+                    sel_tags = []
 
             all_regions = sorted(df["REGION"].dropna().unique())
             with fc3:
-                sel_partner_region = st.selectbox("Partner Region", ["All"] + all_regions, index=0)
+                _ov_pr_key = f"{_fk}_ov_partner_region"
+                _sf_pr = st.session_state.get(f"{_sf}_partner_region", "All")
+                if _sf_pr not in ["All"] + all_regions: _sf_pr = "All"
+                st.session_state[_ov_pr_key] = _sf_pr
+                sel_partner_region = st.selectbox("Partner Region", ["All"] + all_regions,
+                    key=_ov_pr_key,
+                    on_change=_sync_to_sf, args=(_ov_pr_key, f"{_sf}_partner_region"))
 
             partners_in_scope = (
                 sorted(df["PARTNER"].dropna().unique()) if sel_partner_region == "All"
@@ -227,7 +276,14 @@ with tab1:
             )
             sel_regions = all_regions if sel_partner_region == "All" else [sel_partner_region]
             with fc4:
-                sel_partners = st.multiselect("Partner", partners_in_scope, default=partners_in_scope)
+                _ov_pt_key = f"{_fk}_ov_partners"
+                _sf_pt = [p for p in st.session_state.get(f"{_sf}_partners", []) if p in partners_in_scope]
+                if not _sf_pt:
+                    _sf_pt = partners_in_scope
+                st.session_state[_ov_pt_key] = _sf_pt
+                sel_partners = st.multiselect("Partner", partners_in_scope,
+                    key=_ov_pt_key,
+                    on_change=_sync_to_sf, args=(_ov_pt_key, f"{_sf}_partners"))
 
         mask = (
             df["REPORTER"].isin(sel_reporters or reporters_in_scope)
@@ -712,19 +768,29 @@ with tab1:
 
         _dest_all_rep_regions = ["All"] + sorted(df["REPORTER_REGION"].dropna().unique())
         with dest_fc1:
-            dest_rep_region = st.selectbox("Reporter Region", _dest_all_rep_regions, index=0, key=f"{_fk}_dest_rep_region")
+            _dd_rr_sf = st.session_state.get(f"{_sf}_rep_region", "All")
+            if _dd_rr_sf not in _dest_all_rep_regions: _dd_rr_sf = "All"
+            st.session_state[f"{_fk}_dest_rep_region"] = _dd_rr_sf
+            dest_rep_region = st.selectbox("Reporter Region", _dest_all_rep_regions,
+                key=f"{_fk}_dest_rep_region",
+                on_change=_sync_to_sf, args=(f"{_fk}_dest_rep_region", f"{_sf}_rep_region"))
 
         _dest_reporters_scope = (
             sorted(df["REPORTER"].dropna().unique()) if dest_rep_region == "All"
             else sorted(df[df["REPORTER_REGION"] == dest_rep_region]["REPORTER"].dropna().unique())
         )
         with dest_fc2:
-            _dest_rep_default = (
-                [r for r in ["Cote d'Ivoire"] if r in _dest_reporters_scope] if _is_exports
-                else [r for r in ["United States"] if r in _dest_reporters_scope]
-            ) or _dest_reporters_scope[:1]
+            _dd_rep_sf = [r for r in st.session_state.get(f"{_sf}_reporters", []) if r in _dest_reporters_scope]
+            if not _dd_rep_sf:
+                _dd_rep_sf = (
+                    [r for r in ["Cote d'Ivoire"] if r in _dest_reporters_scope] if _is_exports
+                    else [r for r in ["United States"] if r in _dest_reporters_scope]
+                ) or _dest_reporters_scope[:1]
+            st.session_state[f"{_fk}_dest_reporters"] = _dd_rep_sf
             dest_reporters = st.multiselect(
-                "Reporter", _dest_reporters_scope, default=_dest_rep_default, key=f"{_fk}_dest_reporters",
+                "Reporter", _dest_reporters_scope,
+                key=f"{_fk}_dest_reporters",
+                on_change=_sync_to_sf, args=(f"{_fk}_dest_reporters", f"{_sf}_reporters"),
             )
 
         _dest_active_reps = dest_reporters or _dest_reporters_scope
@@ -743,18 +809,36 @@ with tab1:
 
         _dest_all_types = sorted(_dest_df_rep["COMMODITY_TAG"].dropna().unique()) if "COMMODITY_TAG" in _dest_df_rep.columns else []
         with dest_fc3:
-            dest_tags = st.multiselect("Type", _dest_all_types, default=_dest_all_types, key=f"{_fk}_dest_tags") if _dest_all_types else []
+            if _dest_all_types:
+                _dd_tag_sf = [t for t in st.session_state.get(f"{_sf}_tags", []) if t in _dest_all_types]
+                if not _dd_tag_sf: _dd_tag_sf = _dest_all_types
+                st.session_state[f"{_fk}_dest_tags"] = _dd_tag_sf
+                dest_tags = st.multiselect("Type", _dest_all_types,
+                    key=f"{_fk}_dest_tags",
+                    on_change=_sync_to_sf, args=(f"{_fk}_dest_tags", f"{_sf}_tags"))
+            else:
+                dest_tags = []
 
         _dest_all_regions = sorted(_dest_df_rep["REGION"].dropna().unique())
         with dest_fc4:
-            dest_partner_region = st.selectbox("Partner Region", ["All"] + _dest_all_regions, index=0, key=f"{_fk}_dest_partner_region")
+            _dd_pr_sf = st.session_state.get(f"{_sf}_partner_region", "All")
+            if _dd_pr_sf not in ["All"] + _dest_all_regions: _dd_pr_sf = "All"
+            st.session_state[f"{_fk}_dest_partner_region"] = _dd_pr_sf
+            dest_partner_region = st.selectbox("Partner Region", ["All"] + _dest_all_regions,
+                key=f"{_fk}_dest_partner_region",
+                on_change=_sync_to_sf, args=(f"{_fk}_dest_partner_region", f"{_sf}_partner_region"))
 
         _dest_partners_scope = (
             sorted(_dest_df_rep["PARTNER"].dropna().unique()) if dest_partner_region == "All"
             else sorted(_dest_df_rep[_dest_df_rep["REGION"] == dest_partner_region]["PARTNER"].dropna().unique())
         )
         with dest_fc5:
-            dest_partners = st.multiselect("Partners", _dest_partners_scope, default=_dest_partners_scope, key=f"{_fk}_dest_partners")
+            _dd_pt_sf = [p for p in st.session_state.get(f"{_sf}_partners", []) if p in _dest_partners_scope]
+            if not _dd_pt_sf: _dd_pt_sf = _dest_partners_scope
+            st.session_state[f"{_fk}_dest_partners"] = _dd_pt_sf
+            dest_partners = st.multiselect("Partners", _dest_partners_scope,
+                key=f"{_fk}_dest_partners",
+                on_change=_sync_to_sf, args=(f"{_fk}_dest_partners", f"{_sf}_partners"))
 
         _dest_all_cy = sorted(_dest_df_rep["CROP_YEAR"].dropna().unique())
         if len(_dest_all_cy) >= 2:
