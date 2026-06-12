@@ -204,7 +204,7 @@ with tab1:
         (f"{_sf}_reporters",      _rep_default_sf),
         (f"{_sf}_tags",           _all_tags_sf),
         (f"{_sf}_partner_region", "All"),
-        (f"{_sf}_partners",       _all_partners_sf),
+        (f"{_sf}_partners",       []),
     ]:
         if _k not in st.session_state:
             st.session_state[_k] = _v
@@ -278,8 +278,6 @@ with tab1:
             with fc4:
                 _ov_pt_key = f"{_fk}_ov_partners"
                 _sf_pt = [p for p in st.session_state.get(f"{_sf}_partners", []) if p in partners_in_scope]
-                if not _sf_pt:
-                    _sf_pt = partners_in_scope
                 st.session_state[_ov_pt_key] = _sf_pt
                 sel_partners = st.multiselect("Partner", partners_in_scope,
                     key=_ov_pt_key,
@@ -834,7 +832,6 @@ with tab1:
         )
         with dest_fc5:
             _dd_pt_sf = [p for p in st.session_state.get(f"{_sf}_partners", []) if p in _dest_partners_scope]
-            if not _dd_pt_sf: _dd_pt_sf = _dest_partners_scope
             st.session_state[f"{_fk}_dest_partners"] = _dd_pt_sf
             dest_partners = st.multiselect("Partners", _dest_partners_scope,
                 key=f"{_fk}_dest_partners",
