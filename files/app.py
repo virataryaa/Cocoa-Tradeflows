@@ -648,7 +648,7 @@ with tab1:
         disp[disp == 0] = np.nan
         disp_sel     = disp.loc[[cy for cy in sel_sea_cy if cy in disp.index]].copy()
         complete_sel = complete.reindex(disp_sel.index)
-        disp_sel["Total"]   = np.where(complete_sel, disp_sel[MONTH_ORDER].sum(axis=1), np.nan)
+        disp_sel["Total"]   = np.where(disp_sel.index != latest_cy, disp_sel[MONTH_ORDER].sum(axis=1), np.nan)
         disp_sel[_ytd_col]  = disp_sel[MONTH_ORDER[:latest_common_num]].sum(axis=1, min_count=1)
         _yoy_map            = ytd.set_index("CROP_YEAR")["YOY_PCT"].to_dict()
         disp_sel[_yoy_col]  = [_yoy_map.get(cy, np.nan) for cy in disp_sel.index]
