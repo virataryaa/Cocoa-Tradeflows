@@ -250,10 +250,9 @@ with tab1:
             with fc2:
                 if all_tags:
                     _ov_tag_key = f"{_fk}_ov_tags"
-                    _sf_tag = [t for t in st.session_state.get(f"{_sf}_tags", []) if t in all_tags]
-                    if f"{_sf}_tags" not in st.session_state:
-                        _sf_tag = [t for t in ["Beans"] if t in all_tags] or all_tags
-                    st.session_state[_ov_tag_key] = _sf_tag
+                    if _ov_tag_key not in st.session_state:
+                        _init_tags = [t for t in st.session_state.get(f"{_sf}_tags", []) if t in all_tags]
+                        st.session_state[_ov_tag_key] = _init_tags or all_tags
                     sel_tags = st.multiselect("Type", all_tags,
                         key=_ov_tag_key,
                         on_change=_sync_to_sf, args=(_ov_tag_key, f"{_sf}_tags"))
@@ -865,9 +864,9 @@ with tab1:
         _dest_all_types = sorted(_dest_df_rep["COMMODITY_TAG"].dropna().unique()) if "COMMODITY_TAG" in _dest_df_rep.columns else []
         with dest_fc3:
             if _dest_all_types:
-                _dd_tag_sf = [t for t in st.session_state.get(f"{_sf}_tags", []) if t in _dest_all_types]
-                if f"{_sf}_tags" not in st.session_state: _dd_tag_sf = _dest_all_types
-                st.session_state[f"{_fk}_dest_tags"] = _dd_tag_sf
+                if f"{_fk}_dest_tags" not in st.session_state:
+                    _init_dd = [t for t in st.session_state.get(f"{_sf}_tags", []) if t in _dest_all_types]
+                    st.session_state[f"{_fk}_dest_tags"] = _init_dd or _dest_all_types
                 dest_tags = st.multiselect("Type", _dest_all_types,
                     key=f"{_fk}_dest_tags",
                     on_change=_sync_to_sf, args=(f"{_fk}_dest_tags", f"{_sf}_tags"))
