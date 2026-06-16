@@ -236,7 +236,7 @@ with tab1:
             with fc1:
                 _ov_rep_key = f"{_fk}_ov_reporters"
                 _sf_rep = [r for r in st.session_state.get(f"{_sf}_reporters", []) if r in reporters_in_scope]
-                if not _sf_rep:
+                if f"{_sf}_reporters" not in st.session_state:
                     _sf_rep = (
                         [r for r in ["Cote d'Ivoire"] if r in reporters_in_scope] if _is_exports
                         else [r for r in ["United States"] if r in reporters_in_scope]
@@ -641,13 +641,20 @@ with tab1:
             f"Min / Max / Avg rows based on last 10 complete crop years"
         )
 
+        _ytd_col = f"YTD ({MONTH_ORDER[0]}–{latest_common_label})"
+        _yoy_col = "YoY%"
+
         disp = pivot[MONTH_ORDER].astype(float)
         disp[disp == 0] = np.nan
         disp_sel     = disp.loc[[cy for cy in sel_sea_cy if cy in disp.index]].copy()
         complete_sel = complete.reindex(disp_sel.index)
-        disp_sel["Total"] = np.where(complete_sel, disp_sel[MONTH_ORDER].sum(axis=1), np.nan)
+        disp_sel["Total"]   = np.where(complete_sel, disp_sel[MONTH_ORDER].sum(axis=1), np.nan)
+        disp_sel[_ytd_col]  = disp_sel[MONTH_ORDER[:latest_common_num]].sum(axis=1, min_count=1)
+        _yoy_map            = ytd.set_index("CROP_YEAR")["YOY_PCT"].to_dict()
+        disp_sel[_yoy_col]  = [_yoy_map.get(cy, np.nan) for cy in disp_sel.index]
         main_idx  = disp_sel.index.tolist()
         _REF_ROWS = []
+        _HM_EXTRA = [_ytd_col, _yoy_col, "Total"]
 
         _va_label_t1 = None
         _va_data_t1: dict = {}
@@ -655,105 +662,155 @@ with tab1:
             _va_ref  = pivot.loc[complete_years[-10:], MONTH_ORDER].astype(float)
             _va_avg  = _va_ref.mean()
             _va_n    = len(complete_years[-10:])
-            _va_label_t1 = f"\u2195 vs Avg (L{_va_n}Y)%"
+            _va_label_t1 = f"↕ vs Avg (L{_va_n}Y)%"
             for _m in MONTH_ORDER:
                 _c = disp.loc[latest_cy, _m]; _a = _va_avg[_m]
                 _va_data_t1[_m] = (_c / _a - 1) * 100 if pd.notna(_c) and _a > 0 else np.nan
-            _va_data_t1["Total"] = np.nan
+            _va_data_t1[_ytd_col] = np.nan
+            _va_data_t1[_yoy_col] = np.nan
+            _va_data_t1["Total"]  = np.nan
 
         if complete_years:
             last10_hm     = complete_years[-10:]
             ref_hm        = pivot.loc[last10_hm, MONTH_ORDER].astype(float)
             annual_totals = ref_hm.sum(axis=1)
+            ref_ytd       = ref_hm[MONTH_ORDER[:latest_common_num]].sum(axis=1)
             n             = len(last10_hm)
-            sep     = pd.Series({m: np.nan for m in MONTH_ORDER + ["Total"]}, name="  ")
-            row_min = pd.Series({**ref_hm.min().to_dict(),  "Total": annual_totals.min()},  name=f"Min (L{n}Y)")
-            row_max = pd.Series({**ref_hm.max().to_dict(),  "Total": annual_totals.max()},  name=f"Max (L{n}Y)")
-            row_avg = pd.Series({**ref_hm.mean().to_dict(), "Total": annual_totals.mean()}, name=f"Avg (L{n}Y)")
+            sep     = pd.Series({m: np.nan for m in MONTH_ORDER + _HM_EXTRA}, name="  ")
+            row_min = pd.Series({**ref_hm.min().to_dict(),  _ytd_col: ref_ytd.min(),  _yoy_col: np.nan, "Total": annual_totals.min()},  name=f"Min (L{n}Y)")
+            row_max = pd.Series({**ref_hm.max().to_dict(),  _ytd_col: ref_ytd.max(),  _yoy_col: np.nan, "Total": annual_totals.max()},  name=f"Max (L{n}Y)")
+            row_avg = pd.Series({**ref_hm.mean().to_dict(), _ytd_col: ref_ytd.mean(), _yoy_col: np.nan, "Total": annual_totals.mean()}, name=f"Avg (L{n}Y)")
             disp_full = pd.concat([disp_sel, sep.to_frame().T, row_min.to_frame().T, row_max.to_frame().T, row_avg.to_frame().T])
             _REF_ROWS = [f"Min (L{n}Y)", f"Max (L{n}Y)", f"Avg (L{n}Y)"]
         else:
             disp_full = disp_sel.copy()
 
         if _va_label_t1 and latest_cy in disp_full.index:
-            _va_sep  = pd.Series({m: np.nan for m in MONTH_ORDER + ["Total"]}, name=" ")
+            _va_sep  = pd.Series({m: np.nan for m in MONTH_ORDER + _HM_EXTRA}, name=" ")
             _va_s    = pd.Series(_va_data_t1, name=_va_label_t1)
             _va_pos  = disp_full.index.tolist().index(latest_cy) + 1
             disp_full = pd.concat([disp_full.iloc[:_va_pos], _va_sep.to_frame().T, _va_s.to_frame().T, disp_full.iloc[_va_pos:]])
 
         _t1_pct_rows = [r for r in [_va_label_t1] if r and r in disp_full.index]
 
-        styled = (
-            disp_full.style
-            .background_gradient(cmap="Blues", axis=None, subset=pd.IndexSlice[main_idx, MONTH_ORDER])
-            .highlight_null(color=_GC)
-            .format(_fmt, subset=pd.IndexSlice[:, MONTH_ORDER + ["Total"]])
-            .set_properties(**{"text-align": "center", "font-size": "8px"})
-            .set_properties(
-                subset=pd.IndexSlice[main_idx, ["Total"]],
-                **{"font-weight": "700", "background-color": "#f5f5f7",
-                   "border-left": "2px solid #d8d8e0", "font-size": "8px"},
-            )
-            .set_table_styles([
-                {"selector": "th", "props": [("text-align","center"),("font-size","8px"),("font-weight","600")]},
-                {"selector": "td", "props": [("text-align","center"),("font-size","8px")]},
-            ])
-        )
-        if _REF_ROWS:
-            styled = styled.set_properties(
-                subset=pd.IndexSlice[_REF_ROWS, :],
-                **{"background-color": "#eef3fb", "font-weight": "600", "font-style": "italic", "color": "#2c3e6e"},
-            )
-        if _t1_pct_rows:
-            _va_vals_t1 = disp_full.loc[_t1_pct_rows[0], MONTH_ORDER].dropna()
-            _va_abs_t1  = max(abs(_va_vals_t1.min()), abs(_va_vals_t1.max())) if not _va_vals_t1.empty else 20
-            styled = (styled
-                .background_gradient(cmap="RdYlGn", subset=pd.IndexSlice[_t1_pct_rows, MONTH_ORDER], vmin=-_va_abs_t1, vmax=_va_abs_t1)
-                .format(lambda x: f"{x:+.1f}%" if pd.notna(x) else "", subset=pd.IndexSlice[_t1_pct_rows, MONTH_ORDER])
-                .set_properties(subset=pd.IndexSlice[_t1_pct_rows, :],
-                    **{"font-style": "italic", "font-size": "5px", "font-weight": "600"})
-            )
+        # ── HTML heatmap (avoids Streamlit/Styler "None" rendering issues) ────
+        _BLUES  = ["#f7fbff","#deebf7","#c6dbef","#9ecae1","#6baed6","#4292c6","#2171b5","#08519c","#08306b"]
+        _RDYLGN = ["#d73027","#f46d43","#fdae61","#fee08b","#ffffbf","#d9ef8b","#a6d96a","#66bd63","#1a9850"]
 
-        st.dataframe(styled, use_container_width=True, height=min(35 * (len(disp_full.index) + 3), 900))
+        def _lerp_hex(pal, t):
+            t = max(0.0, min(1.0, t))
+            n = len(pal) - 1; i = int(t * n); f = t * n - i
+            if i >= n: return pal[-1]
+            def _h(x): return [int(x.lstrip('#')[j:j+2], 16) for j in (0, 2, 4)]
+            r1,g1,b1 = _h(pal[i]); r2,g2,b2 = _h(pal[i+1])
+            return f"#{int(r1+f*(r2-r1)):02x}{int(g1+f*(g2-g1)):02x}{int(b1+f*(b2-b1)):02x}"
+
+        def _txt_on(bg):
+            r,g,b = [int(bg.lstrip('#')[j:j+2],16) for j in (0,2,4)]
+            return "#1d1d1f" if (0.299*r + 0.587*g + 0.114*b)/255 > 0.55 else "#ffffff"
+
+        _hm_nums = [float(disp_full.loc[r,c]) for r in main_idx for c in MONTH_ORDER if pd.notna(disp_full.loc[r,c])]
+        _hm_vmin = min(_hm_nums) if _hm_nums else 0.0
+        _hm_vmax = max(_hm_nums) if _hm_nums else 1.0
+
+        def _blue_bg(v):
+            if pd.isna(v) or _hm_vmax == _hm_vmin: return _GC
+            return _lerp_hex(_BLUES, (float(v) - _hm_vmin) / (_hm_vmax - _hm_vmin))
+
+        _S   = "padding:3px 6px;white-space:nowrap;font-size:8px;text-align:center;"
+        _THS = f"{_S}background:#0a2463;color:#dde4f0;font-weight:600;border-bottom:1px solid #2a4a83;"
+        _IXS = f"{_S}font-weight:600;text-align:left;background:#f5f5f7;border-right:1px solid #d8d8e0;min-width:48px;"
+        _NC  = lambda extra="": f'<td style="{_S}background:{_GC};{extra}"></td>'
+
+        _hdr_cols  = MONTH_ORDER + ["Total", _ytd_col, "YoY%"]
+        _rows_html = [
+            f'<tr><th style="{_THS}text-align:left;min-width:50px"></th>'
+            + "".join(f'<th style="{_THS}">{c}</th>' for c in _hdr_cols) + "</tr>"
+        ]
+
+        for r in main_idx:
+            cells = [f'<th style="{_IXS}">{r}</th>']
+            for c in MONTH_ORDER:
+                v = disp_full.loc[r, c]
+                if pd.isna(v):
+                    cells.append(_NC())
+                else:
+                    bg = _blue_bg(v); tc = _txt_on(bg)
+                    cells.append(f'<td style="{_S}background:{bg};color:{tc}">{v:{_num_fmt}}</td>')
+            for col, extra in [("Total","background:#f5f5f7;border-left:2px solid #d8d8e0;font-weight:700;"),
+                                (_ytd_col,"background:#e8f0f8;border-left:2px solid #d8d8e0;font-weight:700;")]:
+                v = disp_full.loc[r, col]
+                cells.append(_NC(extra) if pd.isna(v) else f'<td style="{_S}{extra}">{v:{_num_fmt}}</td>')
+            v = disp_full.loc[r, _yoy_col]
+            if pd.isna(v):
+                cells.append(f'<td style="{_S}"></td>')
+            else:
+                yc = "#27ae60" if v >= 0 else "#c0392b"
+                cells.append(f'<td style="{_S}color:{yc};font-weight:700">{v:+.1f}%</td>')
+            _rows_html.append("<tr>" + "".join(cells) + "</tr>")
+
+        _ncols = 1 + len(MONTH_ORDER) + 3
+        _sep   = f'<tr><td colspan="{_ncols}" style="height:2px;padding:0;background:#e0e0e8"></td></tr>'
+
+        if _t1_pct_rows and _va_label_t1 in disp_full.index:
+            _rows_html.append(_sep)
+            _va_pv  = [float(disp_full.loc[_va_label_t1, c]) for c in MONTH_ORDER if pd.notna(disp_full.loc[_va_label_t1, c])]
+            _va_abs = max(abs(min(_va_pv)), abs(max(_va_pv))) if _va_pv else 20
+            cells = [f'<th style="{_IXS}font-style:italic">{_va_label_t1}</th>']
+            for c in MONTH_ORDER:
+                v = disp_full.loc[_va_label_t1, c]
+                if pd.isna(v):
+                    cells.append(_NC())
+                else:
+                    t  = (float(v) + _va_abs) / (2 * _va_abs)
+                    bg = _lerp_hex(_RDYLGN, t); tc = _txt_on(bg)
+                    cells.append(f'<td style="{_S}background:{bg};color:{tc};font-style:italic;font-weight:600">{v:+.1f}%</td>')
+            cells += [f'<td style="{_S}background:{_GC}"></td>'] * 3
+            _rows_html.append("<tr>" + "".join(cells) + "</tr>")
+
+        if _REF_ROWS:
+            _rows_html.append(_sep)
+            for rn in _REF_ROWS:
+                cells = [f'<th style="{_IXS}background:#eef3fb;color:#2c3e6e;font-style:italic">{rn}</th>']
+                for c in MONTH_ORDER:
+                    v = disp_full.loc[rn, c]
+                    txt = f"{v:{_num_fmt}}" if pd.notna(v) else ""
+                    cells.append(f'<td style="{_S}background:#eef3fb;color:#2c3e6e;font-style:italic;font-weight:600">{txt}</td>')
+                for col, extra in [("Total","border-left:2px solid #d8d8e0;font-weight:700;"),
+                                   (_ytd_col,"border-left:2px solid #d8d8e0;font-weight:700;")]:
+                    v = disp_full.loc[rn, col]
+                    txt = f"{v:{_num_fmt}}" if pd.notna(v) else ""
+                    cells.append(f'<td style="{_S}background:#eef3fb;color:#2c3e6e;font-style:italic;{extra}">{txt}</td>')
+                cells.append(f'<td style="{_S}background:#eef3fb"></td>')
+                _rows_html.append("<tr>" + "".join(cells) + "</tr>")
+
+        st.markdown(
+            '<div style="overflow-x:auto;border-radius:6px;border:1px solid #e0e0e8">'
+            '<table style="border-collapse:collapse;width:100%">'
+            + "".join(_rows_html) + "</table></div>",
+            unsafe_allow_html=True,
+        )
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        # ── Rolling + YTD table ───────────────────────────────────────────────
-        col_roll, _, col_ytd = st.columns([1.2, 0.3, 1.2])
-
-        with col_roll:
-            st.markdown(lbl(f"Rolling {flow_label} ({unit_label})", _t1_sub), unsafe_allow_html=True)
-            roll_choice = st.radio("Window", ["1m","3m","6m","12m"], index=3, horizontal=True)
-            window = {"1m":1,"3m":3,"6m":6,"12m":12}[roll_choice]
-            monthly = dff_disp.groupby("DATE")["BAGS"].sum().reset_index().sort_values("DATE")
-            monthly["ROLLING"] = monthly["BAGS"].rolling(window).sum()
-            fig5 = go.Figure(go.Scatter(
-                x=monthly["DATE"], y=monthly["ROLLING"],
-                mode="lines", line=dict(color="#4a7fb5", width=1.8),
-                fill="tozeroy", fillcolor="rgba(74,127,181,0.07)",
-            ))
-            fig5.update_traces(hovertemplate=_HT_BAG)
-            fig5.update_layout(
-                height=CHART_H_LG,
-                xaxis=dict(showgrid=False, tickfont=dict(size=9, color=_TC)),
-                yaxis=dict(showgrid=True, gridcolor=_GC, tickfont=dict(size=9, color=_TC)),
-                margin=dict(t=4, b=7, l=4, r=4), **_D,
-            )
-            st.plotly_chart(fig5, use_container_width=True)
-
-        with col_ytd:
-            st.markdown(lbl(f"YTD \u00b7 {MONTH_ORDER[0]}\u2013{latest_common_label} ({unit_label})", _t1_sub), unsafe_allow_html=True)
-            tbl2 = ytd_disp.copy()
-            tbl2["YTD_FMT"] = tbl2["YTD_BAGS"].map(lambda x: f"{x:{_num_fmt}}")
-            tbl2["YOY_FMT"] = tbl2["YOY_PCT"].map(lambda x: f"{x:+.1f}%" if pd.notna(x) else "\u2014")
-            st.dataframe(
-                tbl2[["CROP_YEAR","YTD_FMT","YOY_FMT"]].rename(columns={
-                    "CROP_YEAR": "Crop Year",
-                    "YTD_FMT":  f"YTD {unit_label} ({MONTH_ORDER[0]}\u2013{latest_common_label})",
-                    "YOY_FMT":  "YoY %",
-                }),
-                use_container_width=True, hide_index=True,
-                height=min(35 * (len(tbl2.index) + 2), 900),
-            )
+        # ── Rolling chart (full width — YTD now in heatmap) ────────────────────
+        st.markdown(lbl(f"Rolling {flow_label} ({unit_label})", _t1_sub), unsafe_allow_html=True)
+        roll_choice = st.radio("Window", ["1m","3m","6m","12m"], index=3, horizontal=True)
+        window = {"1m":1,"3m":3,"6m":6,"12m":12}[roll_choice]
+        monthly = dff_disp.groupby("DATE")["BAGS"].sum().reset_index().sort_values("DATE")
+        monthly["ROLLING"] = monthly["BAGS"].rolling(window).sum()
+        fig5 = go.Figure(go.Scatter(
+            x=monthly["DATE"], y=monthly["ROLLING"],
+            mode="lines", line=dict(color="#4a7fb5", width=1.8),
+            fill="tozeroy", fillcolor="rgba(74,127,181,0.07)",
+        ))
+        fig5.update_traces(hovertemplate=_HT_BAG)
+        fig5.update_layout(
+            height=CHART_H_LG,
+            xaxis=dict(showgrid=False, tickfont=dict(size=9, color=_TC)),
+            yaxis=dict(showgrid=True, gridcolor=_GC, tickfont=dict(size=9, color=_TC)),
+            margin=dict(t=4, b=7, l=4, r=4), **_D,
+        )
+        st.plotly_chart(fig5, use_container_width=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -779,7 +836,7 @@ with tab1:
         )
         with dest_fc2:
             _dd_rep_sf = [r for r in st.session_state.get(f"{_sf}_reporters", []) if r in _dest_reporters_scope]
-            if not _dd_rep_sf:
+            if f"{_sf}_reporters" not in st.session_state:
                 _dd_rep_sf = (
                     [r for r in ["Cote d'Ivoire"] if r in _dest_reporters_scope] if _is_exports
                     else [r for r in ["United States"] if r in _dest_reporters_scope]
