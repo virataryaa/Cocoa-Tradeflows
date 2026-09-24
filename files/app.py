@@ -27,14 +27,35 @@ st.markdown("""
   [data-testid="stExpander"]       { border: 1px solid #e8e8ed !important; border-radius: 8px !important; }
   [data-testid="stDataFrame"]      { border-radius: 8px; overflow: visible !important; }
   .stCaption, [data-testid="stCaptionContainer"] p { font-size: 0.7rem !important; }
-  [data-testid="stRadio"] label, [data-testid="stRadio"] label p, [data-testid="stRadio"] label div { font-size: 0.74rem !important; }
-  .stTabs [data-baseweb="tab-list"]{ gap: 8px; }
-  .stTabs [data-baseweb="tab"], .stTabs [data-baseweb="tab"] p, .stTabs [data-baseweb="tab"] span { font-size: 0.78rem !important; font-weight: 500; }
+  h1, h2, h3, h4, h5, h6 { color: #0a2463 !important; }
+
+  /* Pill / segmented-control tabs */
+  .stTabs [data-baseweb="tab-list"] { background:#eef0f6; padding:4px; border-radius:999px; gap:4px; display:inline-flex; }
+  .stTabs [data-baseweb="tab"] { background:transparent !important; color:#5a6688 !important; border-radius:999px !important;
+      padding:8px 20px !important; font-weight:600; border:none !important; }
+  .stTabs [data-baseweb="tab"] p, .stTabs [data-baseweb="tab"] span { font-size:0.85rem !important; font-weight:600; }
+  .stTabs [aria-selected="true"] { background:#0a2463 !important; color:#ffffff !important; }
+  .stTabs [data-baseweb="tab-highlight"] { display:none !important; }
+  .stTabs [data-baseweb="tab-border"] { display:none !important; }
+
+  /* Radio as pill / segmented control */
+  div[role="radiogroup"] { background:#eef0f6; padding:4px; border-radius:999px; gap:2px; display:inline-flex; flex-wrap:wrap; }
+  div[role="radiogroup"] label { background:transparent !important; border-radius:999px !important; padding:4px 12px !important; margin:0 !important; }
+  div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child { display:none; }
+  div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p { font-size:12px !important; color:#5a6688; }
+  div[role="radiogroup"] label:has(input:checked) { background:#0a2463 !important; }
+  div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p { color:#ffffff !important; font-weight:600; }
+
+  /* Sidebar title (hero) */
+  .sb-title { font-family:'Fraunces', Georgia, serif; font-size:1.5rem; font-weight:600; color:#0a2463; margin-bottom:2px; }
+  .sb-caption { font-size:11px; color:#7a86a8; margin-bottom:16px; line-height:1.4; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
+    st.markdown("<div class='sb-title'>Cocoa Trade Flow</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sb-caption'>Cocoa exports and imports by country, destination and crop year.</div>", unsafe_allow_html=True)
     _CY_PRESETS  = ["Oct\u2013Sep", "Jan\u2013Dec", "Custom"]
     _cy_basis    = st.radio("Crop Year Basis", _CY_PRESETS, index=0, key="cy_basis")
     _MONTH_ABBRS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
